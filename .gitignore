@@ -1,0 +1,7 @@
+*.hi
+*.o
+dist/*
+benchmarks/Bench
+*.core
+*.sublime-project
+*.sublime-workspace

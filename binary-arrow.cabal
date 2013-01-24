@@ -1,0 +1,48 @@
+name:                binary-arrow
+version:             0.1.0.0
+synopsis:            Binary decoder using arrows.
+-- description:         
+license:             Apache-2.0
+license-file:        LICENSE
+author:              Lennart Kolmodin
+maintainer:          kolmodin@gmail.com
+copyright:           2013 Google Inc.
+category:            Data
+build-type:          Simple
+cabal-version:       >=1.8
+
+library
+  extensions:
+    Arrows,
+    TupleSections,
+    BangPatterns
+
+  exposed-modules:
+    Data.Binary.Get.Arrow
+
+  other-modules:
+    Data.Binary.Get.Arrow.Core,
+    Data.Binary.Get.Arrow.VarSize,
+    Data.Binary.Get.Arrow.Decoder,
+    Data.Binary.Get.Arrow.Combinator
+
+  build-depends:
+    base ==4.6.*,
+    bytestring >= 0.10
+
+  ghc-options: -O2 -Wall
+
+benchmark bench
+  type:       exitcode-stdio-1.0
+  main-is:    Bench.hs
+  hs-source-dirs:  benchmarks
+
+  build-depends:
+    base == 4.6.*,
+    binary,
+    deepseq,
+    criterion,
+    binary-arrow,
+    bytestring
+
+  ghc-options: -O2 -Wall
