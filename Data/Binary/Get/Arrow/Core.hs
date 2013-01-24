@@ -36,11 +36,12 @@ data GetA a b
   = S {-# UNPACK #-} !Int !(B.ByteString -> a -> b)
   | D {-# UNPACK #-} !Int !(B.ByteString -> a -> SP B.ByteString (GetA () b))
   | F String
-  | I !(a -> GetA RuntimeInfo b) -- TODO: 'I' should take BS and have Int requirement
+  | I {-# UNPACK #-} !Int !(B.ByteString -> a -> GetA RuntimeInfo b)
 
-data RuntimeInfo = RTI { rtiByteOffset :: ByteOffset
-                       , rtiMoreInputAvailable :: Bool
-                       } deriving Show
+data RuntimeInfo =
+	RTI { rtiByteOffset :: ByteOffset
+      , rtiMoreInputAvailable :: Bool
+      } deriving Show
 
 type ByteOffset = Int
 
@@ -58,7 +59,7 @@ instance Functor (GetA a) where
     case a of
       S n g -> S n (\s b -> f (g s b))
       D n g -> D n (\s b -> let SP s' c = g s b in SP s' (fmap' f c))
-      I g -> I (\x -> fmap' f (g x))
+      I n g -> I n (\s x -> fmap' f (g s x))
       F str -> F str
   {-# INLINE fmap #-}
 
@@ -84,13 +85,11 @@ instance Show (GetA a b) where
 instance Category GetA where
   id = S 0 (\_ x -> x)
   {-# INLINE id #-}
-  (S n f) . (I a) = I (\x -> merge (S n f) (a x))
-  (D n f) . (I a) = I (\x -> merge (D n f) (a x))
-  (F str) . (I a) = I (\x -> merge (F str) (a x))
-  (I a) . (S n f) = D n $ \s x -> SP (B.unsafeDrop n s) (I (\_ -> a (f s x)))
-  (I a) . (D n f) = D n $ \s x -> let SP s' b = f s x in SP s' (merge (I a) b)
-  --a . (I a) = I (merge (D n f) a)
-  -- (D n f) . (I a) = D n (\s x -> let SP s' y = f s x in SP s' (merge (I a) y))
+  (S n f) . (I m g) = I (n+m) (\s x -> merge (S n f) (g s x))
+  (D n f) . (I m g) = I m (\s x -> merge (D n f) (g s x))
+  (F str) . (I m g) = I m (\s x -> merge (F str) (g s x))
+  (I n f) . (S m g) = I (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
+  (I n f) . (D m g) = D m (\s x -> let SP s' b = g s x in SP s' (merge (I n f) b))
   (S n f) . (S m g) = S (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
   (S n f) . (D m g) = D m (\s a -> let SP s' g' = g s a in SP s' (merge (S n f) g'))
   (D n f) . (D m g) = D (n+m) (\s a -> let SP s' g' = g s a in SP s' (merge (D n f) g'))
@@ -105,7 +104,7 @@ instance Category GetA where
 
 {-# RULES
 
-"si/me" forall n f a. merge (S n f) (I a) = I (\x -> merge' (S n f) (a x))
+"si/me" forall n f m g. merge (S n f) (I m g) = I (n+m) (\s x -> merge' (S n f) (g s x))
 
 "ss/me" forall n f m g.
   (.) (S n f) (S m g) = S (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
@@ -180,11 +179,11 @@ instance Applicative (GetA a) where
 	{-# INLINE (<*>) #-}
 
 merge :: GetA b c -> GetA a b -> GetA a c
-merge (S n f) (I a) = I (\x -> merge' (S n f) (a x))
-merge (D n f) (I a) = I (\x -> merge' (D n f) (a x))
-merge (F str) (I a) = I (\x -> merge' (F str) (a x))
-merge (I a) (S n f) = D n $ \s x -> SP (B.unsafeDrop n s) (I (\_ -> a (f s x)))
-merge (I a) (D n f) = D n $ \s x -> let SP s' b = f s x in SP s' (merge' (I a) b)
+merge (S n f) (I m g) = I (n+m) (\s x -> merge' (S n f) (g s x))
+merge (D n f) (I m g) = I m (\s x -> merge' (D n f) (g s x))
+merge (F str) (I m g) = I m (\s x -> merge' (F str) (g s x))
+merge (I n f) (S m g) = I (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
+merge (I n f) (D m g) = D m (\s x -> let SP s' b = g s x in SP s' (merge' (I n f) b))
 merge (S n f) (S m g) = S (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
 merge (S n f) (D m g) = D m $ \s a -> let SP s' g' = g s a in SP s' (merge' (S n f) g')
 merge (D n f) (D m g) = D (n+m) $ \s a -> let SP s' g' = g s a in SP s' (merge' (D n f) g')
@@ -195,10 +194,11 @@ merge (F str) (D n f) = D n (\s x -> let SP s' f' = f s x in SP s' (merge' (F st
 {- INLINE merge #-}
 
 merge' :: GetA b c -> GetA a b -> GetA a c
-merge' (S n f) (I a) = I (\x -> merge'' (S n f) (a x))
-merge' (D n f) (I a) = I (\x -> merge'' (D n f) (a x))
-merge' (I a) (S n f) = D n $ \s x -> SP (B.unsafeDrop n s) (I (\_ -> a (f s x)))
-merge' (I a) (D n f) = D n $ \s x -> let SP s' b = f s x in SP s' (merge' (I a) b)
+merge' (S n f) (I m g) = I (n+m) (\s x -> merge' (S n f) (g s x))
+merge' (D n f) (I m g) = I m (\s x -> merge' (D n f) (g s x))
+merge' (F str) (I m g) = I m (\s x -> merge' (F str) (g s x))
+merge' (I n f) (S m g) = I (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
+merge' (I n f) (D m g) = D m (\s x -> let SP s' b = g s x in SP s' (merge' (I n f) b))
 merge' (S n f) (S m g) = S (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
 merge' (S n f) (D m g) = D m $ \s a -> let SP s' g' = g s a in SP s' (merge' (S n f) g')
 merge' (D n f) (D m g) = D (n+m) $ \s a -> let SP s' g' = g s a in SP s' (merge'' (D n f) g')
@@ -208,10 +208,11 @@ merge' (F str) (S _ _) = F str
 merge' (F str) (D n f) = D n (\s x -> let SP s' f' = f s x in SP s' (merge' (F str) f'))
 
 merge'' :: GetA b c -> GetA a b -> GetA a c
-merge'' (S n f) (I a) = I (\x -> merge'' (S n f) (a x))
-merge'' (D n f) (I a) = I (\x -> merge'' (D n f) (a x))
-merge'' (I a) (S n f) = D n $ \s x -> SP (B.unsafeDrop n s) (I (\_ -> a (f s x)))
-merge'' (I a) (D n f) = D n $ \s x -> let SP s' b = f s x in SP s' (merge'' (I a) b)
+merge'' (S n f) (I m g) = I (n+m) (\s x -> merge'' (S n f) (g s x))
+merge'' (D n f) (I m g) = I m (\s x -> merge'' (D n f) (g s x))
+merge'' (F str) (I m g) = I m (\s x -> merge'' (F str) (g s x))
+merge'' (I n f) (S m g) = I (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
+merge'' (I n f) (D m g) = D m (\s x -> let SP s' b = g s x in SP s' (merge'' (I n f) b))
 merge'' (S n f) (S m g) = S (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
 merge'' (S n f) (D m g) = D m $ \s a -> let SP s' g' = g s a in SP s' (merge'' (S n f) g')
 merge'' (D n f) (D m g) = D (n+m) $ \s a -> let SP s' g' = g s a in SP s' (merge'' (D n f) g')
@@ -295,7 +296,7 @@ instance Show a => Show (R a) where
   show (Hungry n _) = "Hungry for at least " ++ show n ++ " more bytes"
 
 runtimeInfo :: GetA () RuntimeInfo
-runtimeInfo = I (\_ -> S 0 (\bs rti -> rti))
+runtimeInfo = I 0 (\_ _ -> S 0 (\_bs rti -> rti))
 {-# INLINE runtimeInfo #-}
 
 testRuntimeInfo :: GetA () (String, RuntimeInfo)
@@ -312,15 +313,16 @@ runChunk a bs = runContinue 0 True a bs
 {-# INLINE runChunk #-}
 
 runContinue :: Int -> Bool -> GetA () a -> B.ByteString -> R a
-runContinue pos haveMore !a s0 = --trace (show a) $
-  case a of
+runContinue pos haveMore !a0 s0 = --trace (show a) $
+  case a0 of
     F str -> Fail str
     S n f | B.length s0 >= n -> Done (f s0 ())
           | otherwise -> Hungry (n - B.length s0) $ \s ->
-              runContinue (pos + B.length s) haveMore a (B.append s0 s)
+              runContinue (pos + B.length s) haveMore a0 (B.append s0 s)
     D n f | B.length s0 >= n ->
               case f s0 () of SP s' a' -> runContinue pos haveMore a' s'
           | otherwise -> Hungry (n - B.length s0) $ \s ->
-              runContinue (pos + B.length s) haveMore a (B.append s0 s)
-    I f -> let rti = RTI pos haveMore
-           in runContinue pos haveMore (pure rti >>> f ()) s0
+              runContinue (pos + B.length s) haveMore a0 (B.append s0 s)
+    I n f | B.length s0 >= n ->
+              let rti = RTI pos haveMore
+              in runContinue pos haveMore (pure rti >>> (f s0 ())) (B.unsafeDrop n s0)
