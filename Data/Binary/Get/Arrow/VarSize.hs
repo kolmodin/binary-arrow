@@ -20,11 +20,11 @@ data Decode a = NotEnoughInput
             | HereItIs {-# UNPACK #-} !Int !a
             deriving Show
 
-varInt32 :: A () Int32
+varInt32 :: GetA () Int32
 varInt32 = varsize 1 (varBytes (0::Int32)) varInt
 {-# INLINE varInt32 #-}
 
-varsize :: Int -> Int -> (B.ByteString -> Decode a) -> A () a
+varsize :: Int -> Int -> (B.ByteString -> Decode a) -> GetA () a
 varsize s_min s_max fast
   | s_min == s_max = S s_min (\s _ -> case fast s of HereItIs _ x -> x)
   | otherwise =
@@ -34,7 +34,7 @@ varsize s_min s_max fast
                    NotEnoughInput -> SP s (varsize2 (s_min+1) s_max fast))
 {-# INLINE varsize #-}
 
-varsize2 :: Int -> Int -> (B.ByteString -> Decode a) -> A () a
+varsize2 :: Int -> Int -> (B.ByteString -> Decode a) -> GetA () a
 varsize2 s_min s_max fast
   | s_min == s_max = S s_min (\s _ -> case fast s of HereItIs _ x -> x)
   | otherwise =

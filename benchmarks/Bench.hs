@@ -2,7 +2,7 @@
 
 module Main (main, test, ktimes, getStruct4, fooi, testChoice, hej4) where
 
-import Data.Binary.Get.Arrow as A
+import Data.Binary.Get.Arrow as GetA
 
 import Control.Arrow
 
@@ -60,7 +60,7 @@ mtimes f str = go (1000000 :: Int) (f str) str
     go n !_ !str = go (n-1) (f str) str
 {-# INLINE mtimes #-}
 
-varInt32_2 :: A () Int32
+varInt32_2 :: GetA () Int32
 varInt32_2 = proc _ -> do
   a <- varInt32 -< ()
   b <- varInt32 -< ()
@@ -98,7 +98,7 @@ getStruct4_binary = loop []
           let !st = Struct4 w0 w1 w2 w3
           loop (st : acc) (n - 4)
 
-testChoice :: A () (Word16)
+testChoice :: GetA () (Word16)
 testChoice = proc _ -> do
   w <- word8 -< ()
   if w == 0
@@ -114,7 +114,7 @@ binary_test = do
     let !x = a + b + c +d
     return x
 
-test :: A t Word8
+test :: GetA t Word8
 test =
   proc _ -> do
     !a <- word8 -< ()
@@ -124,7 +124,7 @@ test =
     let !x = a + b + c +d
     returnA -< x
 
-fooi :: A t (Word8, Word8, B.ByteString, B.ByteString)
+fooi :: GetA t (Word8, Word8, B.ByteString, B.ByteString)
 fooi =
   proc _ -> do
     !a <- word8 -< ()
@@ -133,7 +133,7 @@ fooi =
     !d <- string 2 -< ()
     returnA -< (a,b,c,d)
 
-hej :: Int -> A () Word8
+hej :: Int -> GetA () Word8
 hej n0 = proc _ -> go n0 -< 0
   where
     go 0 = proc acc -> returnA -< acc
@@ -142,13 +142,13 @@ hej n0 = proc _ -> go n0 -< 0
       let !x = a + acc
       go (n - 1) -< x
 
-hej2 :: Int -> A () Word8
+hej2 :: Int -> GetA () Word8
 hej2 n = proc _ -> do
   xs <- list n word8 -< ()
   returnA -< sum xs
 
-hej3 :: Int -> A () Word8
-hej3 n = A.foldr n (+) 0 word8
+hej3 :: Int -> GetA () Word8
+hej3 n = GetA.foldr n (+) 0 word8
 
-hej4 :: Int -> A () Word32
-hej4 n = A.foldr (n`div`4) (+) 0 word32le
+hej4 :: Int -> GetA () Word32
+hej4 n = GetA.foldr (n`div`4) (+) 0 word32le

@@ -1,5 +1,5 @@
 module Data.Binary.Get.Arrow
-  ( A
+  ( GetA
   , run
   , runSimple
   , failA

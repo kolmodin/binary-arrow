@@ -40,71 +40,71 @@ import Foreign.ForeignPtr       (newForeignPtr_, newForeignPtr, withForeignPtr)
 import Foreign.Storable         (Storable(..))
 import Foreign.Ptr              (Ptr, plusPtr, castPtr)
 
-string :: Int -> A () B.ByteString
+string :: Int -> GetA () B.ByteString
 string !n = S n (\s _ -> B.unsafeTake n s)
 {-# INLINE string #-}
 
-word8 :: A () Word8
+word8 :: GetA () Word8
 word8 = S 1 (const . B.unsafeHead)
 {-# INLINE word8 #-}
 
-word16be :: A () Word16
+word16be :: GetA () Word16
 word16be = S 2 (const . readWord16be)
 {-# INLINE word16be #-}
 
-word16le :: A () Word16
+word16le :: GetA () Word16
 word16le = S 2 (const . readWord16le)
 {-# INLINE word16le #-}
 
-word24be :: A () Word32
+word24be :: GetA () Word32
 word24be = S 3 (const . readWord24be)
 {-# INLINE word24be #-}
 
-word24le :: A () Word32
+word24le :: GetA () Word32
 word24le = S 3 (const . readWord24le)
 {-# INLINE word24le #-}
 
-word32be :: A () Word32
+word32be :: GetA () Word32
 word32be = S 4 (const . readWord32be)
 {-# INLINE word32be #-}
 
-word32le :: A () Word32
+word32le :: GetA () Word32
 word32le = S 4 (const . readWord32le)
 {-# INLINE word32le #-}
 
-word64be :: A () Word64
+word64be :: GetA () Word64
 word64be = S 8 (const . readWord64be)
 {-# INLINE word64be #-}
 
-word64le :: A () Word64
+word64le :: GetA () Word64
 word64le = S 8 (const . readWord64le)
 {-# INLINE word64le #-}
 
-int8 :: A () Int8
+int8 :: GetA () Int8
 int8 = fmap fromIntegral word8
 {-# INLINE int8 #-}
 
-int16le :: A () Int16
+int16le :: GetA () Int16
 int16le = fmap fromIntegral word16le
 {-# INLINE int16le #-}
 
-int16be :: A () Int16
+int16be :: GetA () Int16
 int16be = fmap fromIntegral word16be
 {-# INLINE int16be #-}
 
-int32le :: A () Int32
+int32le :: GetA () Int32
 int32le = fmap fromIntegral word32le
 {-# INLINE int32le #-}
 
-int32be :: A () Int32
+int32be :: GetA () Int32
 int32be = fmap fromIntegral word32be
 {-# INLINE int32be #-}
 
-int64le :: A () Int64
+int64le :: GetA () Int64
 int64le = fmap fromIntegral word64le
 {-# INLINE int64le #-}
 
-int64be :: A () Int64
+int64be :: GetA () Int64
 int64be = fmap fromIntegral word64be
 {-# INLINE int64be #-}
 
@@ -138,7 +138,6 @@ readWord32be = \s ->
   (fromIntegral (s `B.unsafeIndex` 3) )
 
 readWord32le :: B.ByteString -> Word32
-
 readWord32le (B.PS x s l) =
    B.inlinePerformIO $ withForeignPtr x $ \p -> peekByteOff (castPtr p) s
 {-

@@ -23,7 +23,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
 
 -- | Lookahead for when the size is statically known.
-staticLookAhead :: Int -> A a b -> A a b
+staticLookAhead :: Int -> GetA a b -> GetA a b
 staticLookAhead n _ | n < 0 =
   F "Binary: staticLookAhead called with negative argument"
 staticLookAhead _ (F str) = F str
@@ -38,7 +38,7 @@ staticLookAhead limit a@(D _ _) =
     	       Hungry _ _ -> F "Binary.staticLookAhead: dynamic decoder requested too much input"
 
 -- | Lookahead for when the size is unknown.
-lookAhead :: A a b -> A a b
+lookAhead :: GetA a b -> GetA a b
 lookAhead (F str) = F str
 lookAhead (S n f) = D n $ \s x -> SP s (pure (f s x))
 lookAhead a@(D _ _) = proc x -> do
@@ -50,18 +50,18 @@ lookAhead a@(D _ _) = proc x -> do
     (Fail str, _saved) -> failA str -<< ()
     (Hungry _ _, _saved) -> error "Binary: impossible" -< ()
 
-when :: Bool -> A a () -> A a ()
+when :: Bool -> GetA a () -> GetA a ()
 when c ifTrue = proc x -> do
   if c
     then ifTrue -< x
     else returnA -< ()
 {-# INLINE when #-}
 
-unless :: Bool -> A a () -> A a ()
+unless :: Bool -> GetA a () -> GetA a ()
 unless c ifFalse = when (not c) ifFalse
 {-# INLINE unless #-}
 
-list :: Int -> A () a -> A () [a]
+list :: Int -> GetA () a -> GetA () [a]
 list reps a
   | reps <= 0 = proc _ -> returnA -< []
   | otherwise =
@@ -71,13 +71,13 @@ list reps a
         D n f -> list_dynamic reps n f
 {-# INLINE list #-}
 
--- list_dynamic :: Int -> A () a -> A () [a]
+-- list_dynamic :: Int -> GetA () a -> GetA () [a]
 list_dynamic reps n f = proc _ -> do
   x <- (D n f) -< ()
   xs <- list_dynamic (reps - 1) n f -< ()
   returnA -< x:xs
 
-isolate :: Int -> A a b -> A a b
+isolate :: Int -> GetA a b -> GetA a b
 isolate limit a
   | limit < 0 = F "Binary.isolate: given negative argument"
   | otherwise =
@@ -93,7 +93,7 @@ isolate limit a
 {-# INLINE isolate #-}
 
 -- TODO: 'some', 'many' makes sense?
-some :: A () (Maybe b) -> A () [b]
+some :: GetA () (Maybe b) -> GetA () [b]
 some a = proc _ -> do
   vm <- a -< ()
   case vm of
@@ -102,7 +102,7 @@ some a = proc _ -> do
       vs <- many a -< ()
       returnA -< v:vs
 
-many :: A () (Maybe b) -> A () [b]
+many :: GetA () (Maybe b) -> GetA () [b]
 many a = proc _ -> do
   vm <- a -< ()
   case vm of
@@ -111,7 +111,7 @@ many a = proc _ -> do
       vs <- many a -< ()
       returnA -< v:vs
 
-stringUntil :: Word8 -> A () B.ByteString
+stringUntil :: Word8 -> GetA () B.ByteString
 stringUntil w8 = D 1 $ \s0 _ ->
   case B.elemIndex w8 s0 of
   	Just i -> SP (B.unsafeDrop i s0) (pure (B.unsafeTake i s0))
@@ -120,7 +120,7 @@ stringUntil w8 = D 1 $ \s0 _ ->
   	  	xs <- stringUntil w8 -< () -- TODO: O(n^2)
   	  	returnA -< B.append s0 xs
 
-foldr :: Int -> (a -> b -> b) -> b -> A () a -> A () b
+foldr :: Int -> (a -> b -> b) -> b -> GetA () a -> GetA () b
 foldr n f i a =
   case a of
     -- TODO: foldr does not implement D, I, F
