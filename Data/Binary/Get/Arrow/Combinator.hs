@@ -35,7 +35,7 @@ staticLookAhead limit a@(D _ _) =
     SP s $ case runChunk (pure x >>> a) s of
     	       Done y -> pure y
     	       Fail str -> F str
-    	       Hungry _ _ -> F "Binary.staticLookAhead: dynamic decoder requested too much input"
+    	       NeedMoreInput _ _ -> F "Binary.staticLookAhead: dynamic decoder requested too much input"
 
 -- | Lookahead for when the size is unknown.
 lookAhead :: GetA a b -> GetA a b
@@ -48,7 +48,7 @@ lookAhead a@(D _ _) = proc x -> do
       pushBack -< saved
       returnA -< y
     (Fail str, _saved) -> failA str -<< ()
-    (Hungry _ _, _saved) -> error "Binary: impossible" -< ()
+    (NeedMoreInput _ _, _saved) -> error "Binary: impossible" -< ()
 
 when :: Bool -> GetA a () -> GetA a ()
 when c ifTrue = proc x -> do

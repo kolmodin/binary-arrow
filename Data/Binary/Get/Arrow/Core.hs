@@ -3,7 +3,7 @@
 module Data.Binary.Get.Arrow.Core
   ( GetA(..)
   , SP(..)
-  , R(..)
+  , Decoder(..)
 
   , run
   , runChunk
@@ -244,56 +244,56 @@ failA str = F str
 pushBack :: GetA [B.ByteString] ()
 pushBack = D 0 (\s bs -> SP (B.concat (bs ++ [s])) (pure ()))
 
-rtoa :: R a -> GetA () a
+rtoa :: Decoder a -> GetA () a
 rtoa (Done a) = S 0 (\_ _ -> a)
 rtoa (Fail str) = F str -- should never happen if used with runAndKeepTracks
-rtoa (Hungry n f) = D n (\s _ -> SP B.empty (rtoa (f s)))
+rtoa (NeedMoreInput n f) = D n (\s _ -> SP B.empty (rtoa (f s)))
 
-runAndKeepTrack :: GetA () b -> R (Either [B.ByteString] b)
+runAndKeepTrack :: GetA () b -> Decoder (Either [B.ByteString] b)
 runAndKeepTrack a0 = go (run a0) []  
   where
     go a saved =
       case a of
         Done x -> Done (Right x)
         Fail _ -> Done (Left (reverse saved))
-        Hungry n f -> Hungry n $ \s -> go (f s) (s:saved)
+        NeedMoreInput n f -> NeedMoreInput n $ \s -> go (f s) (s:saved)
 
-runEither :: GetA () b -> R (Either [B.ByteString] b)
+runEither :: GetA () b -> Decoder (Either [B.ByteString] b)
 runEither a = go (runAndKeepTrack' a)
   where
   	go r =
   		case r of
   			Done (Done x, _saved) -> Done (Right x)
   			Done (Fail _str, saved) -> Done (Left saved)
-  			Hungry n f -> Hungry n (go . f)
-  			Done (Hungry _ _, _) -> error "Binary: impossible"
+  			NeedMoreInput n f -> NeedMoreInput n (go . f)
+  			Done (NeedMoreInput _ _, _) -> error "Binary: impossible"
   			Fail _ -> error "Binary: impossible"
 
-runAndKeepTrack' :: GetA () b -> R (R b, [B.ByteString])
+runAndKeepTrack' :: GetA () b -> Decoder (Decoder b, [B.ByteString])
 runAndKeepTrack' a = go (run a) [] 
   where
     go a saved =
       case a of
         Done x -> Done (Done x, saved)
         Fail str -> Done (Fail str, saved)
-        Hungry n f -> Hungry n $ \s -> go (f s) (s:saved)
+        NeedMoreInput n f -> NeedMoreInput n $ \s -> go (f s) (s:saved)
 
 runSimple :: GetA () a -> B.ByteString -> a
 runSimple !a s0 =
 	case runChunk a s0 of
 		Fail str -> error $ "Binary: Failed miserably: " ++ str
 		Done x -> x
-		Hungry _ _ -> error "Binary: requested more input than available"
+		NeedMoreInput _ _ -> error "Binary: requested more input than available"
 {-# INLINE runSimple #-}
 
-data R a = Done a
+data Decoder a = Done a
          | Fail String
-         | Hungry {-# UNPACK #-} !Int (B.ByteString -> R a)
+         | NeedMoreInput {-# UNPACK #-} !Int (B.ByteString -> Decoder a)
 
-instance Show a => Show (R a) where
+instance Show a => Show (Decoder a) where
   show (Done a) = "Done: " ++ show a
   show (Fail str) = "Fail: " ++ str
-  show (Hungry n _) = "Hungry for at least " ++ show n ++ " more bytes"
+  show (NeedMoreInput n _) = "NeedMoreInput for at least " ++ show n ++ " more bytes"
 
 runtimeInfo :: GetA () RuntimeInfo
 runtimeInfo = I 0 (\_ _ -> S 0 (\_bs rti -> rti))
@@ -305,23 +305,23 @@ testRuntimeInfo = proc _ -> do
 	rti <- runtimeInfo -< ()
 	returnA -< (str, rti)
 
-run :: GetA () b -> R b
+run :: GetA () b -> Decoder b
 run a = runChunk a B.empty
 
-runChunk :: GetA () a -> B.ByteString -> R a
+runChunk :: GetA () a -> B.ByteString -> Decoder a
 runChunk a bs = runContinue 0 True a bs
 {-# INLINE runChunk #-}
 
-runContinue :: Int -> Bool -> GetA () a -> B.ByteString -> R a
+runContinue :: Int -> Bool -> GetA () a -> B.ByteString -> Decoder a
 runContinue pos haveMore !a0 s0 = --trace (show a) $
   case a0 of
     F str -> Fail str
     S n f | B.length s0 >= n -> Done (f s0 ())
-          | otherwise -> Hungry (n - B.length s0) $ \s ->
+          | otherwise -> NeedMoreInput (n - B.length s0) $ \s ->
               runContinue (pos + B.length s) haveMore a0 (B.append s0 s)
     D n f | B.length s0 >= n ->
               case f s0 () of SP s' a' -> runContinue pos haveMore a' s'
-          | otherwise -> Hungry (n - B.length s0) $ \s ->
+          | otherwise -> NeedMoreInput (n - B.length s0) $ \s ->
               runContinue (pos + B.length s) haveMore a0 (B.append s0 s)
     I n f | B.length s0 >= n ->
               let rti = RTI pos haveMore
