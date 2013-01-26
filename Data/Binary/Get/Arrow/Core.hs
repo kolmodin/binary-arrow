@@ -9,13 +9,13 @@ module Data.Binary.Get.Arrow.Core
   , runChunk
   , runAndKeepTrack
   , runAndKeepTrack'
+  , runtimeInfo
+  , RuntimeInfo(..)
   , failA
-  , runEither
   , rtoa
   , pushBack
   , runSimple
   , atrace
-  , testRuntimeInfo
   )
   where
 
@@ -36,7 +36,7 @@ data GetA a b
   = S {-# UNPACK #-} !Int !(B.ByteString -> a -> b)
   | D {-# UNPACK #-} !Int !(B.ByteString -> a -> SP B.ByteString (GetA () b))
   | F String
-  | I {-# UNPACK #-} !Int !(B.ByteString -> a -> GetA RuntimeInfo b)
+  | I {-# UNPACK #-} !Int {-# UNPACK #-} !Int !(B.ByteString -> a -> GetA RuntimeInfo b)
 
 data RuntimeInfo =
 	RTI { rtiByteOffset :: ByteOffset
@@ -59,7 +59,7 @@ instance Functor (GetA a) where
     case a of
       S n g -> S n (\s b -> f (g s b))
       D n g -> D n (\s b -> let SP s' c = g s b in SP s' (fmap' f c))
-      I n g -> I n (\s x -> fmap' f (g s x))
+      I n m g -> I n m (\s x -> fmap' f (g s x))
       F str -> F str
   {-# INLINE fmap #-}
 
@@ -85,11 +85,11 @@ instance Show (GetA a b) where
 instance Category GetA where
   id = S 0 (\_ x -> x)
   {-# INLINE id #-}
-  (S n f) . (I m g) = I (n+m) (\s x -> merge (S n f) (g s x))
-  (D n f) . (I m g) = I m (\s x -> merge (D n f) (g s x))
-  (F str) . (I m g) = I m (\s x -> merge (F str) (g s x))
-  (I n f) . (S m g) = I (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
-  (I n f) . (D m g) = D m (\s x -> let SP s' b = g s x in SP s' (merge (I n f) b))
+  (S n f) . (I ib ia g) = I ib (ia+n) (\s x -> merge (S n f) (g s x))
+  (D n f) . (I ib ia g) = I ib ia (\s x -> merge (D n f) (g s x))
+  (F str) . (I ib ia g) = I ib ia (\s x -> merge (F str) (g s x))
+  (I ib ia f) . (S m g) = I (ib+m) ia (\s x -> f (B.unsafeDrop m s) (g s x))
+  (I ib ia f) . (D m g) = D m (\s x -> let SP s' b = g s x in SP s' (merge (I ib ia f) b))
   (S n f) . (S m g) = S (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
   (S n f) . (D m g) = D m (\s a -> let SP s' g' = g s a in SP s' (merge (S n f) g'))
   (D n f) . (D m g) = D (n+m) (\s a -> let SP s' g' = g s a in SP s' (merge (D n f) g'))
@@ -103,9 +103,6 @@ instance Category GetA where
 -- They don't play along at all.
 
 {-# RULES
-
-"si/me" forall n f m g. merge (S n f) (I m g) = I (n+m) (\s x -> merge' (S n f) (g s x))
-
 "ss/me" forall n f m g.
   (.) (S n f) (S m g) = S (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
 "sd/me" forall n f m g.
@@ -120,7 +117,8 @@ instance Arrow GetA where
   arr f = S 0 (\_s a -> f a)
   {-# INLINE arr #-}
   first (S n f) = S n (\s (a,b) -> (f s a, b))
-  first (D n f) = D n $ \s (a,b) -> let SP s' a' = f s a in SP s' (fmap (,b) a')
+  first (D n f) = D n (\s (a,b) -> let SP s' a' = f s a in SP s' (fmap (,b) a'))
+  first (I ib ia f) = I ib ia (\s (a,b) -> f s a >>> arr (\x -> (x,b)))
   first (F str) = F str
   {-# INLINE first #-}
 
@@ -179,11 +177,11 @@ instance Applicative (GetA a) where
 	{-# INLINE (<*>) #-}
 
 merge :: GetA b c -> GetA a b -> GetA a c
-merge (S n f) (I m g) = I (n+m) (\s x -> merge' (S n f) (g s x))
-merge (D n f) (I m g) = I m (\s x -> merge' (D n f) (g s x))
-merge (F str) (I m g) = I m (\s x -> merge' (F str) (g s x))
-merge (I n f) (S m g) = I (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
-merge (I n f) (D m g) = D m (\s x -> let SP s' b = g s x in SP s' (merge' (I n f) b))
+merge (S n f) (I ib ia g) = I ib (ia+n) (\s x -> merge' (S n f) (g s x))
+merge (D n f) (I ib ia g) = I ib ia (\s x -> merge' (D n f) (g s x))
+merge (F str) (I ib ia g) = I ib ia (\s x -> merge' (F str) (g s x))
+merge (I ib ia f) (S m g) = I (ib+m) ia (\s x -> f (B.unsafeDrop m s) (g s x))
+merge (I ib ia f) (D m g) = D m (\s x -> let SP s' b = g s x in SP s' (merge' (I ib ia f) b))
 merge (S n f) (S m g) = S (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
 merge (S n f) (D m g) = D m $ \s a -> let SP s' g' = g s a in SP s' (merge' (S n f) g')
 merge (D n f) (D m g) = D (n+m) $ \s a -> let SP s' g' = g s a in SP s' (merge' (D n f) g')
@@ -194,11 +192,11 @@ merge (F str) (D n f) = D n (\s x -> let SP s' f' = f s x in SP s' (merge' (F st
 {- INLINE merge #-}
 
 merge' :: GetA b c -> GetA a b -> GetA a c
-merge' (S n f) (I m g) = I (n+m) (\s x -> merge' (S n f) (g s x))
-merge' (D n f) (I m g) = I m (\s x -> merge' (D n f) (g s x))
-merge' (F str) (I m g) = I m (\s x -> merge' (F str) (g s x))
-merge' (I n f) (S m g) = I (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
-merge' (I n f) (D m g) = D m (\s x -> let SP s' b = g s x in SP s' (merge' (I n f) b))
+merge' (S n f) (I ib ia g) = I ib (ia+n) (\s x -> merge'' (S n f) (g s x))
+merge' (D n f) (I ib ia g) = I ib ia (\s x -> merge'' (D n f) (g s x))
+merge' (F str) (I ib ia g) = I ib ia (\s x -> merge'' (F str) (g s x))
+merge' (I ib ia f) (S m g) = I (ib+m) ia (\s x -> f (B.unsafeDrop m s) (g s x))
+merge' (I ib ia f) (D m g) = D m (\s x -> let SP s' b = g s x in SP s' (merge'' (I ib ia f) b))
 merge' (S n f) (S m g) = S (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
 merge' (S n f) (D m g) = D m $ \s a -> let SP s' g' = g s a in SP s' (merge' (S n f) g')
 merge' (D n f) (D m g) = D (n+m) $ \s a -> let SP s' g' = g s a in SP s' (merge'' (D n f) g')
@@ -208,11 +206,11 @@ merge' (F str) (S _ _) = F str
 merge' (F str) (D n f) = D n (\s x -> let SP s' f' = f s x in SP s' (merge' (F str) f'))
 
 merge'' :: GetA b c -> GetA a b -> GetA a c
-merge'' (S n f) (I m g) = I (n+m) (\s x -> merge'' (S n f) (g s x))
-merge'' (D n f) (I m g) = I m (\s x -> merge'' (D n f) (g s x))
-merge'' (F str) (I m g) = I m (\s x -> merge'' (F str) (g s x))
-merge'' (I n f) (S m g) = I (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
-merge'' (I n f) (D m g) = D m (\s x -> let SP s' b = g s x in SP s' (merge'' (I n f) b))
+merge'' (S n f) (I ib ia g) = I ib (ia+n) (\s x -> merge'' (S n f) (g s x))
+merge'' (D n f) (I ib ia g) = I ib ia (\s x -> merge'' (D n f) (g s x))
+merge'' (F str) (I ib ia g) = I ib ia (\s x -> merge'' (F str) (g s x))
+merge'' (I ib ia f) (S m g) = I (ib+m) ia (\s x -> f (B.unsafeDrop m s) (g s x))
+merge'' (I ib ia f) (D m g) = D m (\s x -> let SP s' b = g s x in SP s' (merge'' (I ib ia f) b))
 merge'' (S n f) (S m g) = S (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
 merge'' (S n f) (D m g) = D m $ \s a -> let SP s' g' = g s a in SP s' (merge'' (S n f) g')
 merge'' (D n f) (D m g) = D (n+m) $ \s a -> let SP s' g' = g s a in SP s' (merge'' (D n f) g')
@@ -228,7 +226,8 @@ plus (F _) plan_b = plan_b
 -- If it succeeds, just proceed and throw the saved input.
 -- If it fails, use the saved input to try plan_b.
 plus plan_a plan_b = proc x -> do
-  ei <- rtoa (runAndKeepTrack (pure x >>> plan_a)) -<< ()
+  rti <- runtimeInfo -< ()
+  ei <- rtoa (runAndKeepTrack rti (pure x >>> plan_a)) -<< ()
   case ei of
     Right result -> returnA -< result
     Left saved_input -> do
@@ -249,8 +248,8 @@ rtoa (Done a) = S 0 (\_ _ -> a)
 rtoa (Fail str) = F str -- should never happen if used with runAndKeepTracks
 rtoa (NeedMoreInput n f) = D n (\s _ -> SP B.empty (rtoa (f s)))
 
-runAndKeepTrack :: GetA () b -> Decoder (Either [B.ByteString] b)
-runAndKeepTrack a0 = go (run a0) []  
+runAndKeepTrack :: RuntimeInfo -> GetA () b -> Decoder (Either [B.ByteString] b)
+runAndKeepTrack rti a0 = go (runContinue (rtiByteOffset rti) (rtiMoreInputAvailable rti) a0 B.empty) []
   where
     go a saved =
       case a of
@@ -258,19 +257,8 @@ runAndKeepTrack a0 = go (run a0) []
         Fail _ -> Done (Left (reverse saved))
         NeedMoreInput n f -> NeedMoreInput n $ \s -> go (f s) (s:saved)
 
-runEither :: GetA () b -> Decoder (Either [B.ByteString] b)
-runEither a = go (runAndKeepTrack' a)
-  where
-  	go r =
-  		case r of
-  			Done (Done x, _saved) -> Done (Right x)
-  			Done (Fail _str, saved) -> Done (Left saved)
-  			NeedMoreInput n f -> NeedMoreInput n (go . f)
-  			Done (NeedMoreInput _ _, _) -> error "Binary: impossible"
-  			Fail _ -> error "Binary: impossible"
-
-runAndKeepTrack' :: GetA () b -> Decoder (Decoder b, [B.ByteString])
-runAndKeepTrack' a = go (run a) [] 
+runAndKeepTrack' :: RuntimeInfo -> GetA () b -> Decoder (Decoder b, [B.ByteString])
+runAndKeepTrack' rti a0 = go (runContinue (rtiByteOffset rti) (rtiMoreInputAvailable rti) a0 B.empty) []
   where
     go a saved =
       case a of
@@ -286,9 +274,10 @@ runSimple !a s0 =
 		NeedMoreInput _ _ -> error "Binary: requested more input than available"
 {-# INLINE runSimple #-}
 
-data Decoder a = Done a
-         | Fail String
-         | NeedMoreInput {-# UNPACK #-} !Int (B.ByteString -> Decoder a)
+data Decoder a
+  = Done a
+  | Fail String
+  | NeedMoreInput {-# UNPACK #-} !Int (B.ByteString -> Decoder a)
 
 instance Show a => Show (Decoder a) where
   show (Done a) = "Done: " ++ show a
@@ -296,14 +285,8 @@ instance Show a => Show (Decoder a) where
   show (NeedMoreInput n _) = "NeedMoreInput for at least " ++ show n ++ " more bytes"
 
 runtimeInfo :: GetA () RuntimeInfo
-runtimeInfo = I 0 (\_ _ -> S 0 (\_bs rti -> rti))
+runtimeInfo = I 0 0 (\_ _ -> S 0 (\_bs rti -> rti))
 {-# INLINE runtimeInfo #-}
-
-testRuntimeInfo :: GetA () (String, RuntimeInfo)
-testRuntimeInfo = proc _ -> do
-	str <- returnA -< "hej"
-	rti <- runtimeInfo -< ()
-	returnA -< (str, rti)
 
 run :: GetA () b -> Decoder b
 run a = runChunk a B.empty
@@ -318,11 +301,16 @@ runContinue pos haveMore !a0 s0 = --trace (show a) $
     F str -> Fail str
     S n f | B.length s0 >= n -> Done (f s0 ())
           | otherwise -> NeedMoreInput (n - B.length s0) $ \s ->
-              runContinue (pos + B.length s) haveMore a0 (B.append s0 s)
+              runContinue pos haveMore a0 (B.append s0 s)
     D n f | B.length s0 >= n ->
-              case f s0 () of SP s' a' -> runContinue pos haveMore a' s'
+              case f s0 () of
+              	SP s' a' ->
+              	  let used = B.length s0 - B.length s'
+              	  in runContinue (pos+used) haveMore a' s'
           | otherwise -> NeedMoreInput (n - B.length s0) $ \s ->
-              runContinue (pos + B.length s) haveMore a0 (B.append s0 s)
-    I n f | B.length s0 >= n ->
-              let rti = RTI pos haveMore
-              in runContinue pos haveMore (pure rti >>> (f s0 ())) (B.unsafeDrop n s0)
+              runContinue pos haveMore a0 (B.append s0 s)
+    I ib ia f | B.length s0 >= (ib+ia) ->
+                  let rti = RTI (pos+ib) haveMore
+                  in runContinue (pos + ib+ia) haveMore (pure rti >>> (f s0 ())) (B.unsafeDrop (ib+ia) s0)
+              | otherwise -> NeedMoreInput (ib + ia - B.length s0) $ \s ->
+                  runContinue pos haveMore a0 (B.append s0 s)

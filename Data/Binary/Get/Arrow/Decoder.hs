@@ -34,11 +34,10 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Internal as B
 import qualified Data.ByteString.Unsafe as B
 
-
-import Foreign.ForeignPtr       (newForeignPtr_, newForeignPtr, withForeignPtr)
+import Foreign.ForeignPtr       (withForeignPtr)
 
 import Foreign.Storable         (Storable(..))
-import Foreign.Ptr              (Ptr, plusPtr, castPtr)
+import Foreign.Ptr              (castPtr)
 
 string :: Int -> GetA () B.ByteString
 string !n = S n (\s _ -> B.unsafeTake n s)
@@ -138,7 +137,7 @@ readWord32be = \s ->
   (fromIntegral (s `B.unsafeIndex` 3) )
 
 readWord32le :: B.ByteString -> Word32
-readWord32le (B.PS x s l) =
+readWord32le (B.PS x s _l) =
    B.inlinePerformIO $ withForeignPtr x $ \p -> peekByteOff (castPtr p) s
 {-
 readWord32le = \s ->

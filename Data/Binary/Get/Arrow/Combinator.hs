@@ -42,7 +42,8 @@ lookAhead :: GetA a b -> GetA a b
 lookAhead (F str) = F str
 lookAhead (S n f) = D n $ \s x -> SP s (pure (f s x))
 lookAhead a@(D _ _) = proc x -> do
-  ei <- rtoa (runAndKeepTrack' (pure x >>> a)) -<< ()
+  rti <- runtimeInfo -< ()
+  ei <- rtoa (runAndKeepTrack' rti (pure x >>> a)) -<< ()
   case ei of
     (Done y, saved) -> do
       pushBack -< saved

@@ -5,6 +5,9 @@ module Data.Binary.Get.Arrow
   , failA
   , atrace
 
+  , RuntimeInfo(..)
+  , runtimeInfo
+
   , string
   , word8
   , word16be
