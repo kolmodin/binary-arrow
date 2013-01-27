@@ -37,6 +37,7 @@ module Data.Binary.Get.Arrow
   , some
   , many
   , Comb.foldr
+  , Comb.foldl'
 
   
   ) where
