@@ -142,9 +142,9 @@ foldl' n0 f i a =
     S m g -> S (n0*m) (\s _ -> goS i m s g)
     _ -> error "Binary.foldl': not implemented"
   where
-    goS !firstValue0 !m !s !g = goS' 0 firstValue0
+    goS !firstValue0 !m !s0 !g = goS' firstValue0 (B.unsafeTake (n0*m) s0)
       where
-        goS' !i !firstValue
-          | i == n0 = firstValue
-          | otherwise = goS' (i+1) (f firstValue (g (B.unsafeDrop (m*i) s) ()))
+        goS' !firstValue !s
+          | B.null s = firstValue
+          | otherwise = goS' (f firstValue (g s ())) (B.unsafeDrop m s)
 {-# INLINE foldl' #-}
