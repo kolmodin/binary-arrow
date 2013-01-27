@@ -32,10 +32,14 @@ library
 
   ghc-options: -O2 -Wall
 
+  if arch(i386) || arch(x86_64)
+    cpp-options: -DFAST_LITTLE_ENDIAN=1
+
 benchmark bench
   type:       exitcode-stdio-1.0
   main-is:    Bench.hs
   hs-source-dirs:  benchmarks
+  other-modules: Decoder
 
   build-depends:
     base == 4.6.*,
@@ -45,4 +49,4 @@ benchmark bench
     binary-arrow,
     bytestring
 
-  ghc-options: -O2 -Wall
+  ghc-options: -O2 -Wall -rtsopts

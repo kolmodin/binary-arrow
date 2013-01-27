@@ -1,8 +1,4 @@
-{-# LANGUAGE BangPatterns #-}
-
--- TODO: We can sometimes read whole Word16, Word32, Word64 using peekByteOff.
--- Need to use CPP to do it for the right endian, and only on the arches that supports unaligned reads.
--- Seems to give ~10% speedup on my macbook (core i5).
+{-# LANGUAGE BangPatterns, CPP #-}
 
 module Data.Binary.Get.Arrow.Decoder
   ( string
@@ -52,7 +48,11 @@ word16be = S 2 (const . readWord16be)
 {-# INLINE word16be #-}
 
 word16le :: GetA () Word16
-word16le = S 2 (const . readWord16le)
+#ifdef FAST_LITTLE_ENDIAN
+word16le = S 2 (const . readWord16le_fast)
+#else
+word16le = S 2 (const . readWord16le)  
+#endif
 {-# INLINE word16le #-}
 
 word24be :: GetA () Word32
@@ -60,7 +60,11 @@ word24be = S 3 (const . readWord24be)
 {-# INLINE word24be #-}
 
 word24le :: GetA () Word32
+#ifdef FAST_LITTLE_ENDIAN
+word24le = S 3 (const . readWord24le_fast)
+#else
 word24le = S 3 (const . readWord24le)
+#endif
 {-# INLINE word24le #-}
 
 word32be :: GetA () Word32
@@ -68,7 +72,11 @@ word32be = S 4 (const . readWord32be)
 {-# INLINE word32be #-}
 
 word32le :: GetA () Word32
+#ifdef FAST_LITTLE_ENDIAN
+word32le = S 4 (const . readWord32le_fast)
+#else
 word32le = S 4 (const . readWord32le)
+#endif
 {-# INLINE word32le #-}
 
 word64be :: GetA () Word64
@@ -76,7 +84,11 @@ word64be = S 8 (const . readWord64be)
 {-# INLINE word64be #-}
 
 word64le :: GetA () Word64
+#ifdef FAST_LITTLE_ENDIAN
+word64le = S 8 (const . readWord64le_fast)
+#else
 word64le = S 8 (const . readWord64le)
+#endif
 {-# INLINE word64le #-}
 
 int8 :: GetA () Int8
@@ -117,6 +129,10 @@ readWord16le = \s ->
   (fromIntegral (s `B.unsafeIndex` 1) `unsafeShiftL` 8) .|.
   (fromIntegral (s `B.unsafeIndex` 0) )
 
+readWord16le_fast :: B.ByteString -> Word16
+readWord16le_fast (B.PS x s _l) =
+   B.inlinePerformIO $ withForeignPtr x $ \p -> peekByteOff (castPtr p) s
+
 readWord24be :: B.ByteString -> Word32
 readWord24be = \s ->
   (fromIntegral (s `B.unsafeIndex` 0) `unsafeShiftL` 16) .|.
@@ -129,6 +145,11 @@ readWord24le = \s ->
   (fromIntegral (s `B.unsafeIndex` 1) `unsafeShiftL`  8) .|.
   (fromIntegral (s `B.unsafeIndex` 0) )
 
+readWord24le_fast :: B.ByteString -> Word32
+readWord24le_fast s@(B.PS x o _l) =
+  (fromIntegral (s `B.unsafeIndex` 2) `unsafeShiftL` 16) .|.
+  (fromIntegral ((B.inlinePerformIO $ withForeignPtr x $ \p -> peekByteOff (castPtr p) o) :: Word16))
+
 readWord32be :: B.ByteString -> Word32
 readWord32be = \s ->
   (fromIntegral (s `B.unsafeIndex` 0) `unsafeShiftL` 24) .|.
@@ -137,15 +158,15 @@ readWord32be = \s ->
   (fromIntegral (s `B.unsafeIndex` 3) )
 
 readWord32le :: B.ByteString -> Word32
-readWord32le (B.PS x s _l) =
-   B.inlinePerformIO $ withForeignPtr x $ \p -> peekByteOff (castPtr p) s
-{-
 readWord32le = \s ->
   (fromIntegral (s `B.unsafeIndex` 3) `unsafeShiftL` 24) .|.
   (fromIntegral (s `B.unsafeIndex` 2) `unsafeShiftL` 16) .|.
   (fromIntegral (s `B.unsafeIndex` 1) `unsafeShiftL`  8) .|.
   (fromIntegral (s `B.unsafeIndex` 0) )
--}
+
+readWord32le_fast :: B.ByteString -> Word32
+readWord32le_fast (B.PS x s _l) =
+   B.inlinePerformIO $ withForeignPtr x $ \p -> peekByteOff (castPtr p) s
 
 readWord64be :: B.ByteString -> Word64
 readWord64be = \s ->
@@ -168,3 +189,7 @@ readWord64le = \s ->
   (fromIntegral (s `B.unsafeIndex` 2) `unsafeShiftL` 16) .|.
   (fromIntegral (s `B.unsafeIndex` 1) `unsafeShiftL`  8) .|.
   (fromIntegral (s `B.unsafeIndex` 0) )
+
+readWord64le_fast :: B.ByteString -> Word64
+readWord64le_fast (B.PS x s _l) =
+   B.inlinePerformIO $ withForeignPtr x $ \p -> peekByteOff (castPtr p) s

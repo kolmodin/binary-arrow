@@ -3,6 +3,7 @@
 module Main (main, test, ktimes, getStruct4, fooi, testChoice, hej4) where
 
 import Data.Binary.Get.Arrow as GetA
+import qualified Decoder (benchmarks)
 
 import Control.Arrow
 
@@ -24,6 +25,7 @@ main = do
   let !lbs_input = L.fromChunks [input]
   C.defaultMain
     [
+      Decoder.benchmarks,
       C.bench "static" $ C.whnf (runSimple test) input,
       C.bench "binary static" $ C.nf (BG.runGet binary_test) lbs_input,
       C.bench "binary getStruct4" $ (C.nf (BG.runGet (getStruct4_binary mega))) oneMegabyteLBS,

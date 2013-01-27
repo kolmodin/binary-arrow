@@ -1,4 +1,4 @@
-{-# LANGUAGE Arrows #-}
+{-# LANGUAGE Arrows, BangPatterns #-}
 module Data.Binary.Get.Arrow.Combinator
   ( staticLookAhead
   , lookAhead
@@ -133,9 +133,18 @@ foldr n f i a =
 {-# INLINE foldr #-}
 
 foldl' :: Int -> (a -> b -> a) -> a -> GetA () b -> GetA () a
-foldl' n f i a =
+foldl' n0 f i a =
   case a of
     -- TODO: foldl' does not implement D, I, F
-    S m g -> S (n*m) (\s _ -> Data.List.foldl' f i [ g (B.unsafeDrop (m*i) s) () | i <- [0..n-1]])
+    
+    -- Note: GHC doesn't fuse foldl' and the list comprehension, so we do it ourselves.
+    --     S m g -> S (n0*m) (\s _ -> Data.List.foldl' f i [ g (B.unsafeDrop (m*i) s) () | i <- [0..n0-1]])
+    S m g -> S (n0*m) (\s _ -> goS i m s g)
     _ -> error "Binary.foldl': not implemented"
+  where
+    goS !firstValue0 !m !s !g = goS' 0 firstValue0
+      where
+        goS' !i !firstValue
+          | i == n0 = firstValue
+          | otherwise = goS' (i+1) (f firstValue (g (B.unsafeDrop (m*i) s) ()))
 {-# INLINE foldl' #-}
