@@ -10,12 +10,15 @@ module Data.Binary.Get.Arrow.Combinator
   , many
   , stringUntil
   , Data.Binary.Get.Arrow.Combinator.foldr
+  , Data.Binary.Get.Arrow.Combinator.foldl'
   ) where
 
 import Data.Binary.Get.Arrow.Core
 
 import Control.Applicative hiding (many,some)
 import Control.Arrow
+
+import qualified Data.List (foldl')
 
 import Data.Word
 
@@ -128,3 +131,11 @@ foldr n f i a =
     S m g -> S (n*m) (\s _ -> Prelude.foldr f i [ g (B.unsafeDrop (m*i) s) () | i <- [0..n-1]])
     _ -> error "Binary.foldr: not implemented"
 {-# INLINE foldr #-}
+
+foldl' :: Int -> (a -> b -> a) -> a -> GetA () b -> GetA () a
+foldl' n f i a =
+  case a of
+    -- TODO: foldl' does not implement D, I, F
+    S m g -> S (n*m) (\s _ -> Data.List.foldl' f i [ g (B.unsafeDrop (m*i) s) () | i <- [0..n-1]])
+    _ -> error "Binary.foldl': not implemented"
+{-# INLINE foldl' #-}
