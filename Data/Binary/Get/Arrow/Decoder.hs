@@ -1,5 +1,14 @@
 {-# LANGUAGE BangPatterns, CPP #-}
 
+-- |
+-- Module      :  Data.Binary.Get.Arrow.Decoder
+-- Copyright   :  2013 Google Inc.
+-- License     :  Apache-2.0 (see the LICENSE file in the distribution)
+--
+-- Maintainer  :  Lennart Kolmodin <kolmodin@gmail.com>
+-- Stability   :  experimental
+-- Portability :  GHC
+--
 module Data.Binary.Get.Arrow.Decoder
   ( string
   , word8

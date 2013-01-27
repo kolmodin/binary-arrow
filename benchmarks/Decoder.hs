@@ -1,4 +1,13 @@
 
+-- |
+-- Module      :  Decoder
+-- Copyright   :  2013 Google Inc.
+-- License     :  Apache-2.0 (see the LICENSE file in the distribution)
+--
+-- Maintainer  :  Lennart Kolmodin <kolmodin@gmail.com>
+-- Stability   :  experimental
+-- Portability :  GHC
+--
 module Decoder (benchmarks, decodeWord32le, decodeWord32be) where
 
 import Data.Binary.Get.Arrow as GetA

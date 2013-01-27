@@ -1,4 +1,14 @@
 {-# LANGUAGE BangPatterns #-}
+
+-- |
+-- Module      :  Data.Binary.Get.Arrow.VarSize
+-- Copyright   :  2013 Google Inc.
+-- License     :  Apache-2.0 (see the LICENSE file in the distribution)
+--
+-- Maintainer  :  Lennart Kolmodin <kolmodin@gmail.com>
+-- Stability   :  experimental
+-- Portability :  GHC
+--
 module Data.Binary.Get.Arrow.VarSize
   ( varInt32
   ) where
@@ -20,6 +30,9 @@ data Decode a = NotEnoughInput
             | HereItIs {-# UNPACK #-} !Int !a
             deriving Show
 
+-- | Decode a base 128 variable size 'Int32'.
+-- Currently, it treats the Ints as unsigned.
+-- <https://developers.google.com/protocol-buffers/docs/encoding#varints>
 varInt32 :: GetA () Int32
 varInt32 = varsize 1 (varBytes (0::Int32)) varInt
 {-# INLINE varInt32 #-}

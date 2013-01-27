@@ -1,6 +1,15 @@
-{-# LANGUAGE Arrows, BangPatterns #-}
+{-# LANGUAGE Arrows, BangPatterns, OverloadedStrings #-}
 
-module Main (main, test, ktimes, getStruct4, fooi, testChoice, hej4) where
+-- |
+-- Module      :  Main
+-- Copyright   :  2013 Google Inc.
+-- License     :  Apache-2.0 (see the LICENSE file in the distribution)
+--
+-- Maintainer  :  Lennart Kolmodin <kolmodin@gmail.com>
+-- Stability   :  experimental
+-- Portability :  GHC
+--
+module Main (main, test, ktimes, getStruct4, fooi, testChoice, hej3, hej4) where
 
 import Data.Binary.Get.Arrow as GetA
 import qualified Decoder (benchmarks)

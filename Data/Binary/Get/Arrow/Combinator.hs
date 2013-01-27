@@ -1,4 +1,14 @@
 {-# LANGUAGE Arrows, BangPatterns #-}
+
+-- |
+-- Module      :  Data.Binary.Get.Arrow.Combinator
+-- Copyright   :  2013 Google Inc.
+-- License     :  Apache-2.0 (see the LICENSE file in the distribution)
+--
+-- Maintainer  :  Lennart Kolmodin <kolmodin@gmail.com>
+-- Stability   :  experimental
+-- Portability :  GHC
+--
 module Data.Binary.Get.Arrow.Combinator
   ( staticLookAhead
   , lookAhead
@@ -25,10 +35,11 @@ import Data.Word
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
 
--- | Lookahead for when the size is statically known.
+-- | Lookahead for when the size is statically known. If the given decoder
+-- fails, it'll fail the main computation as well.
 staticLookAhead :: Int -> GetA a b -> GetA a b
 staticLookAhead n _ | n < 0 =
-  F "Binary: staticLookAhead called with negative argument"
+  F "Binary.staticLookAhead: called with negative argument"
 staticLookAhead _ (F str) = F str
 staticLookAhead limit (S n f)
   | n > limit = F "Binary.staticLookAhead: static decoder requested too much input"
@@ -40,7 +51,8 @@ staticLookAhead limit a@(D _ _) =
     	       Fail str -> F str
     	       NeedMoreInput _ _ -> F "Binary.staticLookAhead: dynamic decoder requested too much input"
 
--- | Lookahead for when the size is unknown.
+-- | Look ahead when the size is unknown. If the given decoder
+-- fails, it'll fail the main computation as well.
 lookAhead :: GetA a b -> GetA a b
 lookAhead (F str) = F str
 lookAhead (S n f) = D n $ \s x -> SP s (pure (f s x))

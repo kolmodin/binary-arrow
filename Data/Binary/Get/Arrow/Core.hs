@@ -1,5 +1,14 @@
 {-# LANGUAGE Arrows, TupleSections, BangPatterns #-}
 
+-- |
+-- Module      :  Data.Binary.Get.Arrow.Core
+-- Copyright   :  2013 Google Inc.
+-- License     :  Apache-2.0 (see the LICENSE file in the distribution)
+--
+-- Maintainer  :  Lennart Kolmodin <kolmodin@gmail.com>
+-- Stability   :  experimental
+-- Portability :  GHC
+--
 module Data.Binary.Get.Arrow.Core
   ( GetA(..)
   , SP(..)
@@ -91,6 +100,7 @@ instance Category GetA where
   (F str) . (I ib g) = I ib (\s x -> merge (F str) (g s x))
   (I ib f) . (S m g) = I (ib+m) (\s x -> f (B.unsafeDrop m s) (g s x))
   (I ib f) . (D m g) = D m (\s x -> let SP s' b = g s x in SP s' (merge (I ib f) b))
+  (I ib f) . (I ib' g) = I ib' (\s x -> merge (I ib f) (g s x))
   (S n f) . (S m g) = S (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
   (S n f) . (D m g) = D m (\s a -> let SP s' g' = g s a in SP s' (merge (S n f) g'))
   (D n f) . (D m g) = D (n+m) (\s a -> let SP s' g' = g s a in SP s' (merge (D n f) g'))
