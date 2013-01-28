@@ -88,6 +88,7 @@ list reps a
 {-# INLINE list #-}
 
 -- list_dynamic :: Int -> GetA () a -> GetA () [a]
+list_dynamic 0 _ _ = arr (\_ -> [])
 list_dynamic reps n f = proc _ -> do
   x <- (D n f) -< ()
   xs <- list_dynamic (reps - 1) n f -< ()
