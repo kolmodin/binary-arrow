@@ -103,7 +103,7 @@ instance Category GetA where
   (I ib f) . (I ib' g) = I ib' (\s x -> merge (I ib f) (g s x))
   (S n f) . (S m g) = S (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
   (S n f) . (D m g) = D m (\s a -> let SP s' g' = g s a in SP s' (merge (S n f) g'))
-  (D n f) . (D m g) = D (n+m) (\s a -> let SP s' g' = g s a in SP s' (merge (D n f) g'))
+  (D n f) . (D m g) = D m (\s a -> let SP s' g' = g s a in SP s' (merge (D n f) g'))
   (D n f) . (S m g) = D (n+m) (\s a -> f (B.unsafeDrop m s) (g s a))
   _ . (F str) = F str
   (F str) . (S _ _) = F str
@@ -195,7 +195,7 @@ merge (I ib f) (S m g) = I (ib+m) (\s x -> f (B.unsafeDrop m s) (g s x))
 merge (I ib f) (D m g) = D m (\s x -> let SP s' b = g s x in SP s' (merge' (I ib f) b))
 merge (S n f) (S m g) = S (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
 merge (S n f) (D m g) = D m $ \s a -> let SP s' g' = g s a in SP s' (merge' (S n f) g')
-merge (D n f) (D m g) = D (n+m) $ \s a -> let SP s' g' = g s a in SP s' (merge' (D n f) g')
+merge (D n f) (D m g) = D m $ \s a -> let SP s' g' = g s a in SP s' (merge' (D n f) g')
 merge (D n f) (S m g) = D (n+m) $ \s a -> f (B.unsafeDrop m s) (g s a)
 merge _ (F str) = F str
 merge (F str) (S _ _) = F str
@@ -210,7 +210,7 @@ merge' (I ib f) (S m g) = I (ib+m) (\s x -> f (B.unsafeDrop m s) (g s x))
 merge' (I ib f) (D m g) = D m (\s x -> let SP s' b = g s x in SP s' (merge'' (I ib f) b))
 merge' (S n f) (S m g) = S (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
 merge' (S n f) (D m g) = D m $ \s a -> let SP s' g' = g s a in SP s' (merge' (S n f) g')
-merge' (D n f) (D m g) = D (n+m) $ \s a -> let SP s' g' = g s a in SP s' (merge'' (D n f) g')
+merge' (D n f) (D m g) = D m $ \s a -> let SP s' g' = g s a in SP s' (merge'' (D n f) g')
 merge' (D n f) (S m g) = D (n+m) $ \s a -> f (B.unsafeDrop m s) (g s a)
 merge' _ (F str) = F str
 merge' (F str) (S _ _) = F str
@@ -224,7 +224,7 @@ merge'' (I ib f) (S m g) = I (ib+m) (\s x -> f (B.unsafeDrop m s) (g s x))
 merge'' (I ib f) (D m g) = D m (\s x -> let SP s' b = g s x in SP s' (merge'' (I ib f) b))
 merge'' (S n f) (S m g) = S (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
 merge'' (S n f) (D m g) = D m $ \s a -> let SP s' g' = g s a in SP s' (merge'' (S n f) g')
-merge'' (D n f) (D m g) = D (n+m) $ \s a -> let SP s' g' = g s a in SP s' (merge'' (D n f) g')
+merge'' (D n f) (D m g) = D m $ \s a -> let SP s' g' = g s a in SP s' (merge'' (D n f) g')
 merge'' (D n f) (S m g) = D (n+m) $ \s a -> f (B.unsafeDrop m s) (g s a)
 merge'' _ (F str) = F str
 merge'' (F str) (S _ _) = F str
