@@ -250,9 +250,11 @@ atrace = S 0 (\_s x -> trace x ())
 
 failA :: String -> GetA a b
 failA str = F str
+{-# INLINE failA #-}
 
 pushBack :: GetA [B.ByteString] ()
 pushBack = D 0 (\s bs -> SP (B.concat (bs ++ [s])) (pure ()))
+{-# INLINE pushBack #-}
 
 rtoa :: Decoder a -> GetA () a
 rtoa (Done a) = S 0 (\_ _ -> a)
