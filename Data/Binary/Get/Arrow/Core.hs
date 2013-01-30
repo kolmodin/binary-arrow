@@ -149,6 +149,9 @@ instance ArrowChoice GetA where
            S n f -> S n (\s b -> case b of
                                    Left lft -> Left (f s lft)
                                    Right rght -> Right rght)
+           D n f -> D n (\s x -> case x of
+                                   Left lft -> let SP s' y = f s lft in SP s' (fmap Left y)
+                                   Right rght -> SP s (pure (Right rght)))
   {-# INLINE left #-}
   f +++ g =
     case (f,g) of
