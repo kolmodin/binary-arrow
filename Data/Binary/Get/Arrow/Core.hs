@@ -44,6 +44,17 @@ data GetA a b
   | D {-# UNPACK #-} !Int !(B.ByteString -> a -> SP B.ByteString (GetA () b))
   | F String
 
+-- Idea for position awareness:
+-- Let the continuation in D take the position parameter.
+
+-- Idea for "more input available" awareness:
+-- Add boolean parameter to D.
+-- If True, behaviour is as normal.
+-- If False, a shorter ByteString than requested can be proveded
+-- (although not less than D's parameter). The continuation can check the
+-- length of the input and figure out if there is more input or not.
+-- If there is more input, strictly more data than requested must be provided.
+
 type ByteOffset = Int
 
 data SP a b = SP !a !b
