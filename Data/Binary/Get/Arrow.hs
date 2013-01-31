@@ -116,11 +116,6 @@ module Data.Binary.Get.Arrow
   , Comb.foldr
   , Comb.foldl'
 
-  -- * Runtime information - experimental!
-
-  , RuntimeInfo(..)
-  , runtimeInfo
-
   -- * Utilities
   , atrace
 
