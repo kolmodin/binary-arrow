@@ -55,16 +55,10 @@ data GetA a b
 -- length of the input and figure out if there is more input or not.
 -- If there is more input, strictly more data than requested must be provided.
 
-type ByteOffset = Int
-
 data SP a b = SP !a !b
   deriving Show
 
-fstSP :: SP t t -> t
-fstSP (SP a _) = a
 
-sndSP :: SP t t -> t
-sndSP (SP _ b) = b
 
 instance Functor (GetA a) where
   fmap f a =
