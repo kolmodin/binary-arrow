@@ -1,4 +1,4 @@
-{-# LANGUAGE Arrows, TupleSections, BangPatterns #-}
+{-# LANGUAGE Arrows, TupleSections, BangPatterns, RankNTypes #-}
 
 -- |
 -- Module      :  Data.Binary.Get.Arrow.Core
@@ -13,6 +13,8 @@ module Data.Binary.Get.Arrow.Core
   ( GetA(..)
   , SP(..)
   , Decoder(..)
+
+  , dynamic
 
   , run
   , runChunk
@@ -41,7 +43,7 @@ import GHC.Exts ( inline )
 
 data GetA a b
   = S {-# UNPACK #-} !Int !(B.ByteString -> a -> b)
-  | D {-# UNPACK #-} !Int !(B.ByteString -> a -> SP B.ByteString (GetA () b))
+  | D () {-# UNPACK #-} !Int !(B.ByteString -> a -> SP B.ByteString (GetA () b))
   | F String
 
 -- Idea for position awareness:
@@ -58,71 +60,65 @@ data GetA a b
 data SP a b = SP !a !b
   deriving Show
 
-
+dynamic = D ()
 
 instance Functor (GetA a) where
-  fmap f a =
-    case a of
-      S n g -> S n (\s b -> f (g s b))
-      D n g -> D n (\s b -> let SP s' c = g s b in SP s' (fmap' f c))
-      F str -> F str
+  fmap = fmap' ()
   {-# INLINE fmap #-}
 
-fmap' :: (t1 -> b) -> GetA t t1 -> GetA t b
-fmap' f a = case a of
-             S n g -> S n (\s b -> f (g s b))
-             D n g -> D n (\s b -> let SP s' c = g s b in SP s' (fmap'' f c))
-             F str -> F str
-{-# INLINE fmap' #-}
+fmap_cont :: (forall xa xb xc. () -> (xb -> xc) -> GetA xa xb -> GetA xa xc)
+          -> (b -> c) -> GetA a b -> GetA a c
+fmap_cont _    f (S n g) = S n (\s b -> f (g s b))
+fmap_cont cont f (D u n g) = dynamic n (\s b -> let SP s' c = g s b in SP s' (cont u f c))
+fmap_cont _    _ (F str) = F str
 
-fmap'' :: (t1 -> b) -> GetA t t1 -> GetA t b
-fmap'' f a = case a of
-             S n g -> S n (\s b -> f (g s b))
-             D n g -> D n (\s b -> let SP s' c = g s b in SP s' (fmap'' f c))
-             F str -> F str
-{-# INLINE fmap'' #-}
+fmap' :: () -> (b -> c) -> GetA a b -> GetA a c
+fmap' _ = fmap_cont fmap'
+{-# NOINLINE fmap' #-}
+
+{-# RULES
+"GetA/fmap" fmap' () = fmap_cont fmap'
+ #-}
 
 instance Show (GetA a b) where
   show (S n _) = "<Static " ++ show n ++ ">"
-  show (D n _) = "<Dynamic " ++ show n ++ ">"
+  show (D _ n _) = "<Dynamic " ++ show n ++ ">"
   show (F str) = "<Fail: " ++ show str ++ ">"
 
 instance Category GetA where
   id = S 0 (\_ x -> x)
   {-# INLINE id #-}
-  (S n f) . (S m g) = S (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
-  (S n f) . (D m g) = D m (\s a -> let SP s' g' = g s a in SP s' (merge (S n f) g'))
-  (D n f) . (D m g) = D m (\s a -> let SP s' g' = g s a in SP s' (merge (D n f) g'))
-  (D n f) . (S m g) = D (n+m) (\s a -> f (B.unsafeDrop m s) (g s a))
-  _ . (F str) = F str
-  (F str) . (S _ _) = F str
-  (F str) . (D n f) = D n (\s x -> let SP s' f' = f s x in SP s' (F str . f'))
-  {-# INLINE [1] (.) #-}
+  (.) = merge' ()
+  {-# INLINE (.) #-}
 
--- Ah... rewrite rules.
--- They don't play along at all.
+merge_cont :: (forall xa xb xc. () -> GetA xb xc -> GetA xa xb -> GetA xa xc)
+           -> GetA b c -> GetA a b -> GetA a c
+merge_cont _    (S n f) (S m g) = S (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
+merge_cont cont (S n f) (D u m g) = dynamic m (\s a -> let SP s' g' = g s a in SP s' (cont u (S n f) g'))
+merge_cont cont (D _ n f) (D u m g) = dynamic m (\s a -> let SP s' g' = g s a in SP s' (cont u (dynamic n f) g'))
+merge_cont _    (D _ n f) (S m g) = dynamic (n+m) (\s a -> f (B.unsafeDrop m s) (g s a))
+merge_cont _    _ (F str) = F str
+merge_cont _   (F str) (S _ _) = F str
+merge_cont cont (F str) (D u n f) = dynamic n (\s x -> let SP s' f' = f s x in SP s' (cont u (F str) f'))
+
+merge' :: () -> GetA b c -> GetA a b -> GetA a c
+merge' _ = merge_cont merge'
+{-# NOINLINE merge' #-}
 
 {-# RULES
-"ss/me" forall n f m g.
-  (.) (S n f) (S m g) = S (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
-"sd/me" forall n f m g.
-    (.) (S n f) (D m g) = D m $ \s a -> let SP s' g' = g s a in SP s' (S n f . g')
-"dd/me" forall n f m g.
-    (.) (D n f) (D m g) = D (n+m) $ \s a -> let SP s' g' = g s a in SP s' (D n f . g')
-"ds/me" forall n f m g.
-    (.) (D n f) (S m g) = D (n+m) $ \s a -> f (B.unsafeDrop m s) (g s a)
+"GetA/merge" merge' () = merge_cont merge'
  #-}
 
 instance Arrow GetA where
   arr f = S 0 (\_s a -> f a)
   {-# INLINE arr #-}
   first (S n f) = S n (\s (a,b) -> (f s a, b))
-  first (D n f) = D n (\s (a,b) -> let SP s' a' = f s a in SP s' (fmap (,b) a'))
+  first (D _ n f) = dynamic n (\s (a,b) -> let SP s' a' = f s a in SP s' (fmap (,b) a'))
   first (F str) = F str
   {-# INLINE first #-}
 
 instance ArrowApply GetA where
-  app = D 0 (\s (a,i) -> SP s (pure i >>> a))
+  app = dynamic 0 (\s (a,i) -> SP s (pure i >>> a))
   {-# INLINE app #-}
 
 instance ArrowZero GetA where
@@ -137,7 +133,7 @@ instance ArrowChoice GetA where
            S n f -> S n (\s b -> case b of
                                    Left lft -> Left (f s lft)
                                    Right rght -> Right rght)
-           D n f -> D n (\s x -> case x of
+           D _ n f -> dynamic n (\s x -> case x of
                                    Left lft -> let SP s' y = f s lft in SP s' (fmap Left y)
                                    Right rght -> SP s (pure (Right rght)))
   {-# INLINE left #-}
@@ -157,9 +153,9 @@ instance ArrowChoice GetA where
                                                 Left lft -> SP s (arr (const lft) >>> S n h >>> arr Left)
                                                 Right rght -> let (SP s' a') = k s rght in SP s' (a' >>> arr Right))
 -}
-        _ -> D 0 (\s a -> case a of
-                            Left lft -> SP s (pure lft >>> f >>> arr Left)
-                            Right rght -> SP s (pure rght >>> g >>> arr Right))
+        _ -> dynamic 0 (\s a -> case a of
+                              Left lft -> SP s (pure lft >>> f >>> arr Left)
+                              Right rght -> SP s (pure rght >>> g >>> arr Right))
   {-# INLINE (+++) #-}
 
   f ||| g = f +++ g >>> arr untag
@@ -177,35 +173,6 @@ instance Applicative (GetA a) where
 		g <- ag -< x
 		returnA -< f g
 	{-# INLINE (<*>) #-}
-
-
-merge :: GetA b c -> GetA a b -> GetA a c
-merge (S n f) (S m g) = S (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
-merge (S n f) (D m g) = D m $ \s a -> let SP s' g' = g s a in SP s' (inline merge' (S n f) g')
-merge (D n f) (D m g) = D m $ \s a -> let SP s' g' = g s a in SP s' (merge' (D n f) g')
-merge (D n f) (S m g) = D (n+m) $ \s a -> f (B.unsafeDrop m s) (g s a)
-merge _ (F str) = F str
-merge (F str) (S _ _) = F str
-merge (F str) (D n f) = D n (\s x -> let SP s' f' = f s x in SP s' (merge' (F str) f'))
-{- INLINE merge #-}
-
-merge' :: GetA b c -> GetA a b -> GetA a c
-merge' (S n f) (S m g) = S (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
-merge' (S n f) (D m g) = D m $ \s a -> let SP s' g' = g s a in SP s' (merge' (S n f) g')
-merge' (D n f) (D m g) = D m $ \s a -> let SP s' g' = g s a in SP s' (merge'' (D n f) g')
-merge' (D n f) (S m g) = D (n+m) $ \s a -> f (B.unsafeDrop m s) (g s a)
-merge' _ (F str) = F str
-merge' (F str) (S _ _) = F str
-merge' (F str) (D n f) = D n (\s x -> let SP s' f' = f s x in SP s' (merge' (F str) f'))
-
-merge'' :: GetA b c -> GetA a b -> GetA a c
-merge'' (S n f) (S m g) = S (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
-merge'' (S n f) (D m g) = D m $ \s a -> let SP s' g' = g s a in SP s' (merge'' (S n f) g')
-merge'' (D n f) (D m g) = D m $ \s a -> let SP s' g' = g s a in SP s' (merge'' (D n f) g')
-merge'' (D n f) (S m g) = D (n+m) $ \s a -> f (B.unsafeDrop m s) (g s a)
-merge'' _ (F str) = F str
-merge'' (F str) (S _ _) = F str
-merge'' (F str) (D n f) = D n (\s x -> let SP s' f' = f s x in SP s' (merge'' (F str) f'))
 
 plus :: GetA a b -> GetA a b -> GetA a b
 plus (S n f) _ = S n f
@@ -229,13 +196,13 @@ failA str = F str
 {-# INLINE failA #-}
 
 pushBack :: GetA [B.ByteString] ()
-pushBack = D 0 (\s bs -> SP (B.concat (bs ++ [s])) (pure ()))
+pushBack = dynamic 0 (\s bs -> SP (B.concat (bs ++ [s])) (pure ()))
 {-# INLINE pushBack #-}
 
 rtoa :: Decoder a -> GetA () a
 rtoa (Done a) = S 0 (\_ _ -> a)
 rtoa (Fail str) = F str -- should never happen if used with runAndKeepTracks
-rtoa (NeedMoreInput n f) = D n (\s _ -> SP B.empty (rtoa (f s)))
+rtoa (NeedMoreInput n f) = dynamic n (\s _ -> SP B.empty (rtoa (f s)))
 
 runAndKeepTrack :: GetA () b -> Decoder (Either [B.ByteString] b)
 runAndKeepTrack a0 = go (runContinue a0 B.empty) []
@@ -288,7 +255,7 @@ runContinue !a0 s0 = -- trace (show a0) $
     S n f | B.length s0 >= n -> Done (f s0 ())
           | otherwise -> NeedMoreInput (n - B.length s0) $ \s ->
               runContinue  a0 (B.append s0 s)
-    D n f | B.length s0 >= n ->
+    D _ n f | B.length s0 >= n ->
               case f s0 () of
               	SP s' a' ->
               	  let _used = B.length s0 - B.length s'

@@ -44,8 +44,8 @@ staticLookAhead _ (F str) = F str
 staticLookAhead limit (S n f)
   | n > limit = F "Binary.staticLookAhead: static decoder requested too much input"
   | otherwise = lookAhead (S n f)
-staticLookAhead limit a@(D _ _) =
-  D limit $ \s x ->
+staticLookAhead limit a@(D _ _ _) =
+  dynamic limit $ \s x ->
     SP s $ case runChunk (pure x >>> a) s of
     	       Done y -> pure y
     	       Fail str -> F str
@@ -55,8 +55,8 @@ staticLookAhead limit a@(D _ _) =
 -- fails, it'll fail the main computation as well.
 lookAhead :: GetA a b -> GetA a b
 lookAhead (F str) = F str
-lookAhead (S n f) = D n $ \s x -> SP s (pure (f s x))
-lookAhead a@(D _ _) = proc x -> do
+lookAhead (S n f) = dynamic n $ \s x -> SP s (pure (f s x))
+lookAhead a@(D _ _ _) = proc x -> do
   ei <- rtoa (runAndKeepTrack' (pure x >>> a)) -<< ()
   case ei of
     (Done y, saved) -> do
@@ -83,13 +83,13 @@ list reps a
       case a of
         F str -> F str
         S n f -> S (reps*n) (\s _ -> [ f (B.unsafeDrop (n*i) s) () | i <- [0..reps-1]])
-        D n f -> list_dynamic reps n f
+        D _ n f -> list_dynamic reps n f
 {-# INLINE list #-}
 
 -- list_dynamic :: Int -> GetA () a -> GetA () [a]
 list_dynamic 0 _ _ = arr (\_ -> [])
 list_dynamic reps n f = proc _ -> do
-  x <- (D n f) -< ()
+  x <- (dynamic n f) -< ()
   xs <- list_dynamic (reps - 1) n f -< ()
   returnA -< x:xs
 
@@ -101,8 +101,8 @@ isolate limit a
         F str -> F str
         S n f | n == limit -> S n f
               | otherwise -> F "Binary.isolate: decoder requested too little/much input"
-        D n f | n > limit -> F "Binary.isolate: dynamic decoder requsted too much input"
-              | otherwise -> D n $ \s x -> -- TODO: isolate could request 'limit' bytes right away for D.
+        D _ n f | n > limit -> F "Binary.isolate: dynamic decoder requsted too much input"
+              | otherwise -> dynamic n $ \s x -> -- TODO: isolate could request 'limit' bytes right away for D.
                  let SP s' a' = f (B.take limit s) x
                      used = B.length s - B.length s'
                  in SP s' (isolate (limit - used) a')
@@ -128,7 +128,7 @@ many a = proc _ -> do
       returnA -< v:vs
 
 stringUntil :: Word8 -> GetA () B.ByteString
-stringUntil w8 = D 1 $ \s0 _ ->
+stringUntil w8 = dynamic 1 $ \s0 _ ->
   case B.elemIndex w8 s0 of
   	Just i -> SP (B.unsafeDrop i s0) (pure (B.unsafeTake i s0))
   	Nothing ->

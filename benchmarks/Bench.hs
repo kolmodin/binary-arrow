@@ -9,7 +9,7 @@
 -- Stability   :  experimental
 -- Portability :  GHC
 --
-module Main (main, test, ktimes, getStruct4, fooi, testChoice, hej3, hej4) where
+module Main (main, test, ktimes, getStruct4, fooi, testChoice, hej, hej2, hej3, hej4) where
 
 import Data.Binary.Get.Arrow as GetA
 import qualified Decoder (benchmarks)
@@ -163,24 +163,3 @@ hej3 n = GetA.foldr n (+) 0 word8
 
 hej4 :: Int -> GetA () Word32
 hej4 n = GetA.foldr (n`div`4) (+) 0 word32le
-
-
-hej5 :: GetA () RuntimeInfo
-hej5 = proc _ -> do
-  _ <- word8 -< ()
-  _ <- word8 -< ()
-  rti <- (path1 <+> path2) -< ()
-  returnA -< rti
-  where
-    path1 = proc _ -> do
-      _ <- word8 -< ()
-      _ <- word8 -< ()
-      runtimeInfo -< ()
-    path2 = failA "hej"
-
-testRuntimeInfo :: GetA () (String, RuntimeInfo)
-testRuntimeInfo = proc _ -> do
-  str <- returnA -< "hej"
-  rti <- runtimeInfo -< ()
-  returnA -< (str, rti)
-

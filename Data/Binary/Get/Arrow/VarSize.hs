@@ -41,7 +41,7 @@ varsize :: Int -> Int -> (B.ByteString -> Decode a) -> GetA () a
 varsize s_min s_max fast
   | s_min == s_max = S s_min (\s _ -> case fast s of HereItIs _ x -> x)
   | otherwise =
-      D s_min (\s _ -> case fast s of
+      dynamic s_min (\s _ -> case fast s of
                    HereItIs n x -> SP (B.unsafeDrop n s) (pure x)
                    InvalidData -> SP s (pure undefined)
                    NotEnoughInput -> SP s (varsize2 (s_min+1) s_max fast))
@@ -51,7 +51,7 @@ varsize2 :: Int -> Int -> (B.ByteString -> Decode a) -> GetA () a
 varsize2 s_min s_max fast
   | s_min == s_max = S s_min (\s _ -> case fast s of HereItIs _ x -> x)
   | otherwise =
-      D s_min (\s _ -> case fast s of
+      dynamic s_min (\s _ -> case fast s of
                    HereItIs n x -> SP (B.unsafeDrop n s) (pure x)
                    InvalidData -> SP s (pure undefined)
                    NotEnoughInput -> SP s (varsize2 (s_min+1) s_max fast))
