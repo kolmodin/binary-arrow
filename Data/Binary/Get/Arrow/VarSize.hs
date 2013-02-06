@@ -39,7 +39,7 @@ varInt32 = varsize 1 (varBytes (0::Int32)) varInt
 
 varsize :: Int -> Int -> (B.ByteString -> Decode a) -> GetA () a
 varsize s_min s_max fast
-  | s_min == s_max = S s_min (\s _ -> case fast s of HereItIs _ x -> x)
+  | s_min == s_max = static s_min (\s _ -> case fast s of HereItIs _ x -> x)
   | otherwise =
       dynamic s_min (\s _ -> case fast s of
                    HereItIs n x -> SP (B.unsafeDrop n s) (pure x)
@@ -49,7 +49,7 @@ varsize s_min s_max fast
 
 varsize2 :: Int -> Int -> (B.ByteString -> Decode a) -> GetA () a
 varsize2 s_min s_max fast
-  | s_min == s_max = S s_min (\s _ -> case fast s of HereItIs _ x -> x)
+  | s_min == s_max = static s_min (\s _ -> case fast s of HereItIs _ x -> x)
   | otherwise =
       dynamic s_min (\s _ -> case fast s of
                    HereItIs n x -> SP (B.unsafeDrop n s) (pure x)

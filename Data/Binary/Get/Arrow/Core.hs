@@ -15,6 +15,7 @@ module Data.Binary.Get.Arrow.Core
   , Decoder(..)
 
   , dynamic
+  , static
 
   , run
   , runChunk
@@ -60,7 +61,11 @@ data GetA a b
 data SP a b = SP !a !b
   deriving Show
 
+dynamic :: Int -> (B.ByteString -> a -> SP B.ByteString (GetA () b)) -> GetA a b
 dynamic = D ()
+
+static :: Int -> (B.ByteString -> a -> b) -> GetA a b
+static = S
 
 instance Functor (GetA a) where
   fmap = fmap' ()
@@ -68,7 +73,7 @@ instance Functor (GetA a) where
 
 fmap_cont :: (forall xa xb xc. () -> (xb -> xc) -> GetA xa xb -> GetA xa xc)
           -> (b -> c) -> GetA a b -> GetA a c
-fmap_cont _    f (S n g) = S n (\s b -> f (g s b))
+fmap_cont _    f (S n g) = static n (\s b -> f (g s b))
 fmap_cont cont f (D u n g) = dynamic n (\s b -> let SP s' c = g s b in SP s' (cont u f c))
 fmap_cont _    _ (F str) = F str
 
@@ -86,15 +91,15 @@ instance Show (GetA a b) where
   show (F str) = "<Fail: " ++ show str ++ ">"
 
 instance Category GetA where
-  id = S 0 (\_ x -> x)
+  id = static 0 (\_ x -> x)
   {-# INLINE id #-}
   (.) = merge' ()
   {-# INLINE (.) #-}
 
 merge_cont :: (forall xa xb xc. () -> GetA xb xc -> GetA xa xb -> GetA xa xc)
            -> GetA b c -> GetA a b -> GetA a c
-merge_cont _    (S n f) (S m g) = S (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
-merge_cont cont (S n f) (D u m g) = dynamic m (\s a -> let SP s' g' = g s a in SP s' (cont u (S n f) g'))
+merge_cont _    (S n f) (S m g) = static (n+m) (\s x -> f (B.unsafeDrop m s) (g s x))
+merge_cont cont (S n f) (D u m g) = dynamic m (\s a -> let SP s' g' = g s a in SP s' (cont u (static n f) g'))
 merge_cont cont (D _ n f) (D u m g) = dynamic m (\s a -> let SP s' g' = g s a in SP s' (cont u (dynamic n f) g'))
 merge_cont _    (D _ n f) (S m g) = dynamic (n+m) (\s a -> f (B.unsafeDrop m s) (g s a))
 merge_cont _    _ (F str) = F str
@@ -110,9 +115,9 @@ merge' _ = merge_cont merge'
  #-}
 
 instance Arrow GetA where
-  arr f = S 0 (\_s a -> f a)
+  arr f = static 0 (\_s a -> f a)
   {-# INLINE arr #-}
-  first (S n f) = S n (\s (a,b) -> (f s a, b))
+  first (S n f) = static n (\s (a,b) -> (f s a, b))
   first (D _ n f) = dynamic n (\s (a,b) -> let SP s' a' = f s a in SP s' (fmap (,b) a'))
   first (F str) = F str
   {-# INLINE first #-}
@@ -130,7 +135,7 @@ instance ArrowPlus GetA where
 instance ArrowChoice GetA where
   left a = case a of
            F str -> F str
-           S n f -> S n (\s b -> case b of
+           S n f -> static n (\s b -> case b of
                                    Left lft -> Left (f s lft)
                                    Right rght -> Right rght)
            D _ n f -> dynamic n (\s x -> case x of
@@ -139,7 +144,7 @@ instance ArrowChoice GetA where
   {-# INLINE left #-}
   f +++ g =
     case (f,g) of
-        (S n h, S m k) | n == m -> S n (\s a -> case a of
+        (S n h, S m k) | n == m -> static n (\s a -> case a of
                                                 Left lft -> Left (h s lft)
                                                 Right rght -> Right (k s rght))
 {- Becomes huge expressions when inlined. Is it worth it?
@@ -166,7 +171,7 @@ instance ArrowChoice GetA where
   {-# INLINE (|||) #-}
 
 instance Applicative (GetA a) where
-	pure x = S 0 (\_ _ -> x)
+	pure x = static 0 (\_ _ -> x)
 	{-# INLINE pure #-}
 	(<*>) af ag = proc x -> do
 		f <- af -< x
@@ -175,7 +180,7 @@ instance Applicative (GetA a) where
 	{-# INLINE (<*>) #-}
 
 plus :: GetA a b -> GetA a b -> GetA a b
-plus (S n f) _ = S n f
+plus (S n f) _ = static n f
 plus (F _) plan_b = plan_b
 -- Run the first decoder until it either succeeds or fails, but keep track of all the input it uses.
 -- If it succeeds, just proceed and throw the saved input.
@@ -189,7 +194,7 @@ plus plan_a plan_b = proc x -> do
       plan_b -< x
 
 atrace :: GetA String ()
-atrace = S 0 (\_s x -> trace x ())
+atrace = static 0 (\_s x -> trace x ())
 
 failA :: String -> GetA a b
 failA str = F str
@@ -200,7 +205,7 @@ pushBack = dynamic 0 (\s bs -> SP (B.concat (bs ++ [s])) (pure ()))
 {-# INLINE pushBack #-}
 
 rtoa :: Decoder a -> GetA () a
-rtoa (Done a) = S 0 (\_ _ -> a)
+rtoa (Done a) = static 0 (\_ _ -> a)
 rtoa (Fail str) = F str -- should never happen if used with runAndKeepTracks
 rtoa (NeedMoreInput n f) = dynamic n (\s _ -> SP B.empty (rtoa (f s)))
 

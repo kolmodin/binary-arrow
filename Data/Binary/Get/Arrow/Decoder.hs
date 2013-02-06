@@ -45,58 +45,58 @@ import Foreign.Storable         (Storable(..))
 import Foreign.Ptr              (castPtr)
 
 string :: Int -> GetA () B.ByteString
-string !n = S n (\s _ -> B.unsafeTake n s)
+string !n = static n (\s _ -> B.unsafeTake n s)
 {-# INLINE string #-}
 
 word8 :: GetA () Word8
-word8 = S 1 (const . B.unsafeHead)
+word8 = static 1 (const . B.unsafeHead)
 {-# INLINE word8 #-}
 
 word16be :: GetA () Word16
-word16be = S 2 (const . readWord16be)
+word16be = static 2 (const . readWord16be)
 {-# INLINE word16be #-}
 
 word16le :: GetA () Word16
 #ifdef FAST_LITTLE_ENDIAN
-word16le = S 2 (const . readWord16le_fast)
+word16le = static 2 (const . readWord16le_fast)
 #else
-word16le = S 2 (const . readWord16le)  
+word16le = static 2 (const . readWord16le)  
 #endif
 {-# INLINE word16le #-}
 
 word24be :: GetA () Word32
-word24be = S 3 (const . readWord24be)
+word24be = static 3 (const . readWord24be)
 {-# INLINE word24be #-}
 
 word24le :: GetA () Word32
 #ifdef FAST_LITTLE_ENDIAN
-word24le = S 3 (const . readWord24le_fast)
+word24le = static 3 (const . readWord24le_fast)
 #else
-word24le = S 3 (const . readWord24le)
+word24le = static 3 (const . readWord24le)
 #endif
 {-# INLINE word24le #-}
 
 word32be :: GetA () Word32
-word32be = S 4 (const . readWord32be)
+word32be = static 4 (const . readWord32be)
 {-# INLINE word32be #-}
 
 word32le :: GetA () Word32
 #ifdef FAST_LITTLE_ENDIAN
-word32le = S 4 (const . readWord32le_fast)
+word32le = static 4 (const . readWord32le_fast)
 #else
-word32le = S 4 (const . readWord32le)
+word32le = static 4 (const . readWord32le)
 #endif
 {-# INLINE word32le #-}
 
 word64be :: GetA () Word64
-word64be = S 8 (const . readWord64be)
+word64be = static 8 (const . readWord64be)
 {-# INLINE word64be #-}
 
 word64le :: GetA () Word64
 #ifdef FAST_LITTLE_ENDIAN
-word64le = S 8 (const . readWord64le_fast)
+word64le = static 8 (const . readWord64le_fast)
 #else
-word64le = S 8 (const . readWord64le)
+word64le = static 8 (const . readWord64le)
 #endif
 {-# INLINE word64le #-}
 

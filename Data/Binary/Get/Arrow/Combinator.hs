@@ -43,7 +43,7 @@ staticLookAhead n _ | n < 0 =
 staticLookAhead _ (F str) = F str
 staticLookAhead limit (S n f)
   | n > limit = F "Binary.staticLookAhead: static decoder requested too much input"
-  | otherwise = lookAhead (S n f)
+  | otherwise = lookAhead (static n f)
 staticLookAhead limit a@(D _ _ _) =
   dynamic limit $ \s x ->
     SP s $ case runChunk (pure x >>> a) s of
@@ -82,7 +82,7 @@ list reps a
   | otherwise =
       case a of
         F str -> F str
-        S n f -> S (reps*n) (\s _ -> [ f (B.unsafeDrop (n*i) s) () | i <- [0..reps-1]])
+        S n f -> static (reps*n) (\s _ -> [ f (B.unsafeDrop (n*i) s) () | i <- [0..reps-1]])
         D _ n f -> list_dynamic reps n f
 {-# INLINE list #-}
 
@@ -99,7 +99,7 @@ isolate limit a
   | otherwise =
       case a of
         F str -> F str
-        S n f | n == limit -> S n f
+        S n f | n == limit -> static n f
               | otherwise -> F "Binary.isolate: decoder requested too little/much input"
         D _ n f | n > limit -> F "Binary.isolate: dynamic decoder requsted too much input"
               | otherwise -> dynamic n $ \s x -> -- TODO: isolate could request 'limit' bytes right away for D.
@@ -140,7 +140,7 @@ foldr :: Int -> (a -> b -> b) -> b -> GetA () a -> GetA () b
 foldr n f i a =
   case a of
     -- TODO: foldr does not implement D, I, F
-    S m g -> S (n*m) (\s _ -> Prelude.foldr f i [ g (B.unsafeDrop (m*i) s) () | i <- [0..n-1]])
+    S m g -> static (n*m) (\s _ -> Prelude.foldr f i [ g (B.unsafeDrop (m*i) s) () | i <- [0..n-1]])
     _ -> error "Binary.foldr: not implemented"
 {-# INLINE foldr #-}
 
@@ -151,7 +151,7 @@ foldl' n0 f i a =
     
     -- Note: GHC doesn't fuse foldl' and the list comprehension, so we do it ourselves.
     --     S m g -> S (n0*m) (\s _ -> Data.List.foldl' f i [ g (B.unsafeDrop (m*i) s) () | i <- [0..n0-1]])
-    S m g -> S (n0*m) (\s _ -> goS i m s g)
+    S m g -> static (n0*m) (\s _ -> goS i m s g)
     _ -> error "Binary.foldl': not implemented"
   where
     goS !firstValue0 !m !s0 !g = goS' firstValue0 (B.unsafeTake (n0*m) s0)
