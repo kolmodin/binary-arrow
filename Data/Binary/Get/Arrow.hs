@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -77,6 +78,11 @@ module Data.Binary.Get.Arrow
   , run
   , runSimple
 
+#ifdef BINARY_COMPAT
+  -- *** Compatibility with binary
+  , runArrow
+#endif
+
   -- ** Failing a decoder
   , failA
 
@@ -118,11 +124,13 @@ module Data.Binary.Get.Arrow
 
   -- * Utilities
   , atrace
-
-  
   ) where
 
 import Data.Binary.Get.Arrow.Core
 import Data.Binary.Get.Arrow.Decoder
 import Data.Binary.Get.Arrow.Combinator as Comb
 import Data.Binary.Get.Arrow.VarSize
+
+#ifdef BINARY_COMPAT
+import Data.Binary.Get.Arrow.Compat
+#endif
