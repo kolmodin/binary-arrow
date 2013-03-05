@@ -124,12 +124,17 @@ module Data.Binary.Get.Arrow
 
   -- * Utilities
   , atrace
+
+  -- * Vector
+  , toVector
+  , toUnboxedVector
   ) where
 
 import Data.Binary.Get.Arrow.Core
 import Data.Binary.Get.Arrow.Decoder
 import Data.Binary.Get.Arrow.Combinator as Comb
 import Data.Binary.Get.Arrow.VarSize
+import Data.Binary.Get.Arrow.Vector
 
 #ifdef BINARY_COMPAT
 import Data.Binary.Get.Arrow.Compat
